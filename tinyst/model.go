@@ -1,5 +1,13 @@
 package tinyst
 
+import (
+	"fmt"
+	"math/rand"
+	"time"
+	"os"
+	"encoding/json"
+)
+
 type Config struct {
 	VocabSize int
 	MaxSeqLen int
@@ -78,7 +86,7 @@ func NewModel (cfg Config) (*Model, error) {
 
 		block.Attention.Heads = make([]AttentionHead, cfg.NumHeads)
 		for l := range block.Attention.Heads {
-			Head := block.Attention.Heads[l]
+			Head := &block.Attention.Heads[l]
 			Head.W_Q = make2D (cfg.DModel, dhead)
 			Head.W_K = make2D (cfg.DModel, dhead)
 			Head.W_V = make2D (cfg.DModel, dhead)
@@ -109,4 +117,83 @@ func make2D (rows, cols int) [][]float64 {
         mat[i] = make([]float64, cols)
     }
     return mat
+}
+
+func (model *Model) Init (path string) error {
+	if path != "" {
+		fmt.Printf ("Loading from weights file %s", path)
+		err := model.Load (path)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	rng := rand.New (rand.NewSource(time.Now ().UnixNano ()))
+	fillRandom (model.TokenEmbed, rng)
+	fillRandom (model.PosEmbed, rng)
+	fillRandom (model.Unembed, rng)
+
+	// allocate model transformers
+	for i:= range model.TBlocks {
+		block := &model.TBlocks[i]
+
+		// allocate transformer Attention
+		for j := range block.Attention.Heads {
+			head := &block.Attention.Heads[j]
+			fillRandom (head.W_Q, rng)
+			fillRandom (head.W_K, rng)
+			fillRandom (head.W_V, rng)
+		}
+
+		fillRandom (block.Attention.W_O, rng)
+
+		// allocate transformer FeedForward
+		fillRandom (block.FFN.W1, rng)
+		fillRandom (block.FFN.W2, rng)
+
+		for k:= range block.FFN.B1 {
+			block.FFN.B1 [k] = rng.Float64 ()
+		}
+
+		for k:= range block.FFN.B2 {
+			block.FFN.B2 [k] = rng.Float64 ()
+		}
+
+		// allocate layer normal LN1
+		for k := range block.LN1.Gamma { block.LN1.Gamma [k] = 1}
+		for k := range block.LN1.Beta  { block.LN1.Beta [k] = 0}
+		// allocate layer normal LN2
+		for k := range block.LN2.Gamma { block.LN2.Gamma [k] = 1}
+		for k := range block.LN2.Beta  { block.LN2.Beta [k] = 0}
+	}
+
+	return nil
+}
+
+func fillRandom (mat [][]float64, rng *rand.Rand) {
+	for r:= range mat {
+		for c := range mat[r] {
+			mat[r][c] = rng.Float64 ()
+		}
+	}
+}
+
+func (model *Model) Load (path string) error {
+	data, err := os.ReadFile (path);
+	if err != nil {
+		return err;
+	}
+	return json.Unmarshal (data, model)
+}
+
+func (model *Model) Save (path string) error {
+	if path == "" {
+		return fmt.Errorf ("must give path of save file for saving weights")
+	}
+	data, err := json.MarshalIndent (model, "", " ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile (path, data, 0644)
 }
