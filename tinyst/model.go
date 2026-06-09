@@ -121,7 +121,7 @@ func make2D (rows, cols int) [][]float64 {
 
 func (model *Model) Init (path string) error {
 	if path != "" {
-		fmt.Printf ("Loading from weights file %s", path)
+		fmt.Printf ("Loading from weights file %s\n", path)
 		err := model.Load (path)
 		if err != nil {
 			return err

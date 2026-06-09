@@ -34,11 +34,13 @@ func main () {
 		panic (err)
 	}
 
-	err = m.Init ("")
+	err = m.Init (weightFilePath)
 	if err != nil {
 		fmt.Printf ("Failed to init model %v", err)
 		panic (err)
 	}
+
+	fmt.Println (" model initialized successfully")
 
 	err = m.Save (weightFilePath)
 	if err != nil {
