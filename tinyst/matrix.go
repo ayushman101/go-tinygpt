@@ -113,3 +113,27 @@ func AddBias (a, b []float64) ([]float64, error) {
 
 	return c, nil
 }
+
+func CopyMat (a [][]float64) [][]float64 {
+	b := make ([][]float64, len (a))
+
+	for i:= range a {
+		b[i] = make ([]float64, len (a[i]))
+		for k := range a[i] {
+			b[i][k] = a[i][k]
+		}
+	}
+
+	return b
+}
+
+// probablity for each token in our vocab and expected targets
+func CrossEntropy (probs []float64, targets []int) float64 {
+	for i := range probs {
+		if targets[i] == 1 {
+			return -math.Log (probs[i])
+		}
+	}
+
+	panic ("no target class found")
+}
