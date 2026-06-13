@@ -26,7 +26,7 @@ func main () {
 
 	text := string (data)
 
-	bpe.Train (text)
+	bpe.Train (text, 256)
 	// cfg := tinyst.Config {
 	// 	VocabSize : 70,
 	// 	DModel : 64,
