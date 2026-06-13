@@ -9,6 +9,7 @@ import (
 
 const (
 	inputFilePath string = "input.txt"
+	tokenizerFilePath string = "tokenizer_vocab.json"
 	// weightFilePath string = "weights1.json"
 )
 
@@ -18,6 +19,8 @@ func main () {
 	fmt.Println ("New bpe created")
 	fmt.Println ("Bpe regex : ", bpe.GetRegex () )
 
+	bpe.Load (tokenizerFilePath)
+
 	data, err := os.ReadFile (inputFilePath)
 	if err != nil {
 		fmt.Printf ("failed to read input file : %v", err)
@@ -26,7 +29,8 @@ func main () {
 
 	text := string (data)
 
-	bpe.Train (text, 256)
+	// bpe.Train (text, 256)
+	// bpe.Save (tokenizerFilePath)
 
 	fmt.Println ("first 100 characters", text[:100])
 
