@@ -3,6 +3,7 @@ package tokenizer
 import (
 	"fmt"
 	"regexp"
+	"encoding/hex"
 )
 
 
@@ -128,11 +129,36 @@ func (bpe *BPETokenizer) Train (data string, trainingSize int) error {
 }
 
 func (bpe *BPETokenizer) Encode (input string) []int {
-	return nil
+	words := bpe.regex.FindAllString (input, -1)
+
+	var chunks []int
+
+	for _, word := range words {
+		for _, b := range []byte(word) {
+			hex := fmt.Sprintf ("%02x", b)
+			id := bpe.vocab[hex] 
+			chunks = append (chunks, id)
+		}
+	}
+
+	return chunks
 }
 
-func (bpe *BPETokenizer) Decode ([]int) string {
-	return "" 
+func (bpe *BPETokenizer) Decode (input []int) string {
+	var hexString string
+
+	for _, id := range input {
+		h := bpe.idToToken [id]
+		hexString += h
+	}
+
+	bytes, err := hex.DecodeString (hexString)
+	if err != nil {
+		fmt.Println (" failed to convert hexString to bytes", err)
+		return ""
+	}
+
+	return string (bytes)
 }
 
 func (bpe *BPETokenizer) Save (path string) error {

@@ -27,6 +27,16 @@ func main () {
 	text := string (data)
 
 	bpe.Train (text, 256)
+
+	fmt.Println ("first 100 characters", text[:100])
+
+	encoding := bpe.Encode (text[:100])
+
+	fmt.Println ("encoding" , encoding)
+
+	decoding := bpe.Decode (encoding)
+
+	fmt.Println ("decoding", decoding)
 	// cfg := tinyst.Config {
 	// 	VocabSize : 70,
 	// 	DModel : 64,
