@@ -30,8 +30,6 @@ func main () {
 
 	text := string (data)
 
-	_ = bpe.Encode (text)
-
 	cfg := tinyst.Config {
 		VocabSize : 256,
 		DModel : 64,
@@ -56,9 +54,23 @@ func main () {
 
 	fmt.Println (" model initialized successfully")
 
-	err = m.Save (weightFilePath)
+	// err = m.Save (weightFilePath)
+	// if err != nil {
+	// 	fmt.Printf ("Failed to save the model %v", err)
+	// 	panic (err)
+	// }
+
+	fmt.Println (" input text:", text[:500])
+
+	encoding := bpe.Encode (text[:500])
+
+	fmt.Println (" encoding :", encoding, " \nlength : ", len (encoding))
+	embed, err := m.Forward (encoding)
+
 	if err != nil {
-		fmt.Printf ("Failed to save the model %v", err)
-		panic (err)
+		fmt.Println ("failed forward pass", err)
+		os.Exit (1)
 	}
+
+	fmt.Println ("length of input embedding :", len (embed))
 }

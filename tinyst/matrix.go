@@ -35,7 +35,7 @@ func Mult (a, b [][]float64) ([][]float64, error) {
 
 func Add (a, b [][]float64) error {
 	if len (a) != len (b) || len (a[0]) != len (b[0]) {
-		return fmt.Errorf ("cannot incompatible matrices")
+		return fmt.Errorf ("cannot add incompatible matrices")
 	}
 
 	for i := range a {
