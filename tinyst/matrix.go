@@ -2,14 +2,15 @@ package tinyst
 
 import (
 	"math"
+	"fmt"
 )
 
 func Mult (a, b [][]float64) ([][]float64, error) {
-	a_rows = len (a)
-	a_cols = len (a[0])
+	a_rows := len (a)
+	a_cols := len (a[0])
 
-	b_rows = len (b)
-	b_cols = len (b[0])
+	b_rows := len (b)
+	b_cols := len (b[0])
 
 	if a_cols != b_rows {
 		return nil, fmt.Errorf ("Cannot multiply incompatible matrices")
@@ -19,7 +20,7 @@ func Mult (a, b [][]float64) ([][]float64, error) {
 	for i:= range r {
 		r[i] = make ([]float64, b_cols)
 		for j := range a[i] {
-			aij = a[i][j]
+			aij := a[i][j]
 			if aij == 0 {
 				continue
 			}
@@ -49,7 +50,7 @@ func Add (a, b [][]float64) error {
 func Scale (a [][]float64, s int) {
 	for i:= range a {
 		for j:= range a[i] {
-			a[i][j] *= s
+			a[i][j] *= float64 (s)
 		}
 	}
 }
@@ -90,7 +91,7 @@ func SoftMax (a []float64) {
 	}
 }
 
-func ReLU (a []float64) {
+func ReLU (a [][]float64) {
 	for i := range a {
 		for k := range a[i] {
 			 if a[i][k] < 0 {

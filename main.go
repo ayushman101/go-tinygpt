@@ -3,14 +3,15 @@ package main
 import (
 	"fmt"
 	"os"
-	// "go-gpt/tinyst"
+	"go-gpt/tinyst"
 	"go-gpt/tokenizer"
 )
 
 const (
-	inputFilePath string = "input.txt"
-	tokenizerFilePath string = "tokenizer_vocab.json"
-	// weightFilePath string = "weights1.json"
+	inputFilePath string = "./artifacts/input.txt"
+	tokenizerFilePath string = "./artifacts/tokenizer_vocab.json"
+	weightFilePath string = "./artifacts/weights1.json"
+	VOCAB_SIZE int = 256
 )
 
 func main () {
@@ -29,45 +30,35 @@ func main () {
 
 	text := string (data)
 
-	// bpe.Train (text, 256)
-	// bpe.Save (tokenizerFilePath)
+	_ = bpe.Encode (text)
 
-	fmt.Println ("first 100 characters", text[:100])
+	cfg := tinyst.Config {
+		VocabSize : 256,
+		DModel : 64,
+		MaxSeqLen : 64,
+		NumHeads : 4,
+		NumLayers : 3,
+		FFNHidden : 256,
+	}
 
-	encoding := bpe.Encode (text[:100])
+	m, err := tinyst.NewModel (cfg)
 
-	fmt.Println ("encoding" , encoding)
+	if err != nil {
+		fmt.Printf ("Failed to create new model %v", err)
+		panic (err)
+	}
 
-	decoding := bpe.Decode (encoding)
+	err = m.Init (weightFilePath)
+	if err != nil {
+		fmt.Printf ("Failed to init model %v", err)
+		panic (err)
+	}
 
-	fmt.Println ("decoding", decoding)
-	// cfg := tinyst.Config {
-	// 	VocabSize : 70,
-	// 	DModel : 64,
-	// 	MaxSeqLen : 64,
-	// 	NumHeads : 4,
-	// 	NumLayers : 3,
-	// 	FFNHidden : 256,
-	// }
-	//
-	// m, err := tinyst.NewModel (cfg)
-	//
-	// if err != nil {
-	// 	fmt.Printf ("Failed to create new model %v", err)
-	// 	panic (err)
-	// }
-	//
-	// err = m.Init (weightFilePath)
-	// if err != nil {
-	// 	fmt.Printf ("Failed to init model %v", err)
-	// 	panic (err)
-	// }
-	//
-	// fmt.Println (" model initialized successfully")
-	//
-	// err = m.Save (weightFilePath)
-	// if err != nil {
-	// 	fmt.Printf ("Failed to save the model %v", err)
-	// 	panic (err)
-	// }
+	fmt.Println (" model initialized successfully")
+
+	err = m.Save (weightFilePath)
+	if err != nil {
+		fmt.Printf ("Failed to save the model %v", err)
+		panic (err)
+	}
 }
