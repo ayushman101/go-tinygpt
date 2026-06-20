@@ -71,12 +71,24 @@ func (m *Model) Forward (input []int) ([][]float64, error) { // input is Id vect
 					return nil, err
 				}
 
+				// masking the upper triangle
+				// A token can only affect tokens coming before it
+				for i:=0; i< len (W); i++ {
+					for j:=i+1 ; j< len (W[i]) ; j++ {
+						W[i][j] = -1e9
+					}
+				}
 
-				fmt.Println ("Weights matrix dimensions ", len (W), " ", len (W[0]))
+				// apply softmax
+				for i := range W {
+					SoftMax (W[i])
+				}
+
+				fmt.Println ("Weights after softmax", W)
 			}
 		}
 
-		low += high 
+		low += high
 	}
 
 	return input_embed, nil
