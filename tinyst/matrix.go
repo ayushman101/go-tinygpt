@@ -138,3 +138,30 @@ func CrossEntropy (probs []float64, targets []int) float64 {
 
 	panic ("no target class found")
 }
+
+func Concat (a, b [][]float64) ([][]float64, error){
+	if len (a) != len (b) {
+		return nil, fmt.Errorf ("incompatible matrices. Their rows should be same")
+	}
+
+	result := make ([][]float64, len (a))
+
+	for i := range result {
+		result[i] = make ([]float64, len (a[i]) + len (b[i]))
+		k := 0
+
+		// push a matrix values
+		for j:=0;j<len (a[i]); j++ {
+			result [i][k] = a[i][j]
+			k++
+		}
+
+		// push b matrix values
+		for j:=0;j<len (b[i]); j++ {
+			result [i][k] = b[i][j]
+			k++
+		}
+	}
+
+	return result, nil
+}

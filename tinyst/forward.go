@@ -1,6 +1,9 @@
 package tinyst
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // TODO: need to process input in max seq len batches
 func (m *Model) Forward (input []int) ([][]float64, error) { // input is Id vector , returns logits
@@ -23,8 +26,10 @@ func (m *Model) Forward (input []int) ([][]float64, error) { // input is Id vect
 		input_embed = make ([][]float64, len (window))
 
 		// get the token vector from Id
-		for i:=0 ; i<len (window); i++ {
-			input_embed [i] = m.TokenEmbed [window[i]]
+		for i, id := range window {
+			row := make([]float64, m.DModel)
+			copy(row, m.TokenEmbed[id])
+			input_embed[i] = row
 		}
 
 		// 2. Add pos embed
@@ -37,7 +42,7 @@ func (m *Model) Forward (input []int) ([][]float64, error) { // input is Id vect
 		// process Tblocks (transformer layers)
 		for _, t := range m.TBlocks {
 			// transformer attention heads
-			for _, ah:= range t.Attention.Heads {
+			for index, ah:= range t.Attention.Heads {
 				// Query matrix
 				Q, err := Mult (input_embed, ah.W_Q)
 				if err != nil {
@@ -84,12 +89,62 @@ func (m *Model) Forward (input []int) ([][]float64, error) { // input is Id vect
 					SoftMax (W[i])
 				}
 
-				fmt.Println ("Weights after softmax", W)
+				headOut, err := Mult (W, V)
+				if err != nil {
+					return nil, err
+				}
+
+				for i := range headOut {
+					for j := range headOut[i] {
+						t.Attention.W_O [i][j + index * len (headOut[i])] = headOut[i][j]
+					}
+				}
+
+				fmt.Println ("dimensions of final weights output", len (t.Attention.W_O), " ", len (t.Attention.W_O[0]))
 			}
+
+			// add the attention output to input embedding
+			Add (input_embed, t.Attention.W_O)
+			fmt.Println ("input embed after adding attention output", len (input_embed), " ", len (input_embed[0]))
+
+			// Next is first Layer normalization
+			normal := applyLayerNorm (input_embed, t.LN1)
+			fmt.Println ("embed after normalization dimensions : ", len (normal), " ", len (normal[0]))
+	
+			// Feed Forward
+	
+			// Second layer normalization
 		}
 
 		low += high
+		break
 	}
 
 	return input_embed, nil
+}
+
+
+func applyLayerNorm(x [][]float64, ln LayerNormal) [][]float64 {
+    result := CopyMat(x)
+    d := len(result[0])
+    for i := range result {
+        var mean float64
+        for _, v := range result[i] {
+            mean += v
+        }
+        mean /= float64(d)
+
+        var variance float64
+        for _, v := range result[i] {
+            diff := v - mean
+            variance += diff * diff
+        }
+        variance /= float64(d)
+
+        for j := range result[i] {
+            result[i][j] = (result[i][j] - mean) / math.Sqrt(variance+1e-5)
+            result[i][j] = result[i][j]*ln.Gamma[j] + ln.Beta[j]
+        }
+    }
+    return result
 }
