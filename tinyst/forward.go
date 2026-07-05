@@ -5,7 +5,6 @@ import (
 	"math"
 )
 
-// TODO: need to process input in max seq len batches
 func (m *Model) Forward (input []int) ([][]float64, error) { // input is Id vector , returns logits
 	// 1. create our token embedding matrix
 	low := 0
@@ -13,6 +12,9 @@ func (m *Model) Forward (input []int) ([][]float64, error) { // input is Id vect
 	seq_len := len (input)
 
 	var input_embed [][]float64
+
+	// final logits to be returned
+	var allLogits [][]float64
 
 	for low < seq_len {
 		if (seq_len - low) > m.MaxSeqLen {
@@ -24,6 +26,8 @@ func (m *Model) Forward (input []int) ([][]float64, error) { // input is Id vect
 		window := input[low:low + high]
 
 		input_embed = make ([][]float64, len (window))
+
+		// x := make([][]float64, batchSize)
 
 		// get the token vector from Id
 		for i, id := range window {
@@ -112,15 +116,53 @@ func (m *Model) Forward (input []int) ([][]float64, error) { // input is Id vect
 			fmt.Println ("embed after normalization dimensions : ", len (normal), " ", len (normal[0]))
 	
 			// Feed Forward
+			// multiply with Weight matrix 1
+			ffn1, err := Mult (normal, t.FFN.W1)
+			if err != nil {
+				return nil, err
+			}
+
+			// add bias 1
+			for i := range ffn1 {
+				for j:= range ffn1[i] {
+					ffn1[i][j] += t.FFN.B1[j]
+				}
+			}
+
+			// apply relu
+			ReLU (ffn1)
 	
 			// Second layer normalization
+			ffn2, err := Mult (ffn1, t.FFN.W2)
+			if err != nil {
+				return nil, err
+			}
+
+			// add bias 1
+			for i := range ffn2 {
+				for j:= range ffn2[i] {
+					ffn2[i][j] += t.FFN.B2[j]
+				}
+			}
+
+			// add the ffn2 to input embedding
+			Add (input_embed, ffn2)
+			fmt.Println ("input embed after adding feed forward 2 layer output", len (input_embed), " ", len (input_embed[0]))
 		}
 
+		// get the logits
+		logits, err:= Mult(input_embed, m.Unembed)
+
+		if err != nil {
+			return nil, err
+		}
+
+		allLogits = append(allLogits, logits...)
+
 		low += high
-		break
 	}
 
-	return input_embed, nil
+	return allLogits, nil
 }
 
 

@@ -72,5 +72,5 @@ func main () {
 		os.Exit (1)
 	}
 
-	fmt.Println ("length of input embedding :", len (embed))
+	fmt.Println ("length of outpu embedding :", len (embed))
 }
