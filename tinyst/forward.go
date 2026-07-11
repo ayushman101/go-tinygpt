@@ -27,8 +27,6 @@ func (m *Model) Forward (input []int) ([][]float64, error) { // input is Id vect
 
 		input_embed = make ([][]float64, len (window))
 
-		// x := make([][]float64, batchSize)
-
 		// get the token vector from Id
 		for i, id := range window {
 			row := make([]float64, m.DModel)
@@ -46,6 +44,15 @@ func (m *Model) Forward (input []int) ([][]float64, error) { // input is Id vect
 		// process Tblocks (transformer layers)
 		for _, t := range m.TBlocks {
 			// transformer attention heads
+			var concat [][]float64
+
+			// keep a copy of original input matrix
+			x := CopyMat (input_embed)
+
+			// first layer normalization
+			input_embed = applyLayerNorm (input_embed, t.LN1)
+			fmt.Println ("embed dimensions after first normalization : ", len (input_embed), " ", len (input_embed[0]))
+
 			for index, ah:= range t.Attention.Heads {
 				// Query matrix
 				Q, err := Mult (input_embed, ah.W_Q)
@@ -98,21 +105,30 @@ func (m *Model) Forward (input []int) ([][]float64, error) { // input is Id vect
 					return nil, err
 				}
 
-				for i := range headOut {
-					for j := range headOut[i] {
-						t.Attention.W_O [i][j + index * len (headOut[i])] = headOut[i][j]
+				if index == 0 {
+					concat = headOut
+				} else {
+					concat, err = Concat (concat, headOut)
+					if err != nil {
+						return nil, err
 					}
 				}
-
-				fmt.Println ("dimensions of final weights output", len (t.Attention.W_O), " ", len (t.Attention.W_O[0]))
 			}
 
-			// add the attention output to input embedding
-			Add (input_embed, t.Attention.W_O)
-			fmt.Println ("input embed after adding attention output", len (input_embed), " ", len (input_embed[0]))
+			attentionOut, err := Mult (concat, t.Attention.W_O)  // W_O read-only
+			if err != nil {
+				return nil, err
+			}
 
-			// Next is first Layer normalization
-			normal := applyLayerNorm (input_embed, t.LN1)
+			// add the attention output to original input embedding
+			Add (x, attentionOut)
+			fmt.Println ("input embed after adding attention output", len (x), " ", len (x[0]))
+
+			// new snapshot
+			input_embed = CopyMat (x)
+
+			// Next is Layer normalization
+			normal := applyLayerNorm (input_embed, t.LN2)
 			fmt.Println ("embed after normalization dimensions : ", len (normal), " ", len (normal[0]))
 	
 			// Feed Forward
@@ -132,7 +148,7 @@ func (m *Model) Forward (input []int) ([][]float64, error) { // input is Id vect
 			// apply relu
 			ReLU (ffn1)
 	
-			// Second layer normalization
+			// multiply weight matrix 2
 			ffn2, err := Mult (ffn1, t.FFN.W2)
 			if err != nil {
 				return nil, err
