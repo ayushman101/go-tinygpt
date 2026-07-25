@@ -65,12 +65,25 @@ func main () {
 	encoding := bpe.Encode (text[:500])
 
 	fmt.Println (" encoding :", encoding, " \nlength : ", len (encoding))
-	embed, err := m.Forward (encoding)
+	cache, logits, err := m.Forward (encoding)
 
 	if err != nil {
 		fmt.Println ("failed forward pass", err)
 		os.Exit (1)
 	}
 
-	fmt.Println ("length of outpu embedding :", len (embed))
+	_ = cache
+
+	// Test backward pass with first MaxSeqLen tokens as input, shifted as targets
+	trainInput := encoding[:cfg.MaxSeqLen]
+	trainTargets := encoding[1:cfg.MaxSeqLen+1]
+	trCache, _, err := m.Forward(trainInput)
+	if err != nil {
+		fmt.Println ("failed forward for training", err)
+		os.Exit (1)
+	}
+	grads := m.Backward(trCache, trainTargets)
+
+	fmt.Println ("length of output logits :", len (logits))
+	fmt.Println ("gradients computed: TokenEmbed", len (grads.TokenEmbed), "x", len (grads.TokenEmbed[0]))
 }

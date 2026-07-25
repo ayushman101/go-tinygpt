@@ -47,6 +47,14 @@ func Add (a, b [][]float64) error {
 	return nil
 }
 
+func ScaleFloat (a [][]float64, s float64) {
+	for i:= range a {
+		for j:= range a[i] {
+			a[i][j] *= s
+		}
+	}
+}
+
 func Scale (a [][]float64, s int) {
 	for i:= range a {
 		for j:= range a[i] {
@@ -126,6 +134,19 @@ func CopyMat (a [][]float64) [][]float64 {
 	}
 
 	return b
+}
+
+func SumRows(a [][]float64) []float64 {
+	if len(a) == 0 {
+		return nil
+	}
+	result := make([]float64, len(a[0]))
+	for i := range a {
+		for j := range a[i] {
+			result[j] += a[i][j]
+		}
+	}
+	return result
 }
 
 // probablity for each token in our vocab and expected targets

@@ -5,204 +5,197 @@ import (
 	"math"
 )
 
-func (m *Model) Forward (input []int) ([][]float64, error) { // input is Id vector , returns logits
-	// 1. create our token embedding matrix
+func (m *Model) Forward(input []int) (*TrainCache, [][]float64, error) {
+	cache := &TrainCache{
+		InputIDs: input,
+		Blocks:   make([]BlockCache, len(m.TBlocks)),
+	}
+
 	low := 0
 	high := 0
-	seq_len := len (input)
-
-	var input_embed [][]float64
-
-	// final logits to be returned
+	seqLen := len(input)
 	var allLogits [][]float64
 
-	for low < seq_len {
-		if (seq_len - low) > m.MaxSeqLen {
+	for low < seqLen {
+		if seqLen-low > m.MaxSeqLen {
 			high = m.MaxSeqLen
 		} else {
-			high = seq_len - low
+			high = seqLen - low
 		}
 
-		window := input[low:low + high]
+		window := input[low : low+high]
 
-		input_embed = make ([][]float64, len (window))
-
-		// get the token vector from Id
+		x := make([][]float64, len(window))
 		for i, id := range window {
 			row := make([]float64, m.DModel)
 			copy(row, m.TokenEmbed[id])
-			input_embed[i] = row
+			x[i] = row
 		}
 
-		// 2. Add pos embed
-		for i := range input_embed {
-			for j := range input_embed[i] {
-				input_embed[i][j] += m.PosEmbed[i][j]
+		for i := range x {
+			for j := range x[i] {
+				x[i][j] += m.PosEmbed[i][j]
 			}
 		}
 
-		// process Tblocks (transformer layers)
-		for _, t := range m.TBlocks {
-			// transformer attention heads
+		for bi, block := range m.TBlocks {
+			bc := &cache.Blocks[bi]
+
+			// === Attention sublayer ===
+			bc.LN1In = CopyMat(x)
+			normed := applyLayerNorm(x, block.LN1)
+			bc.LN1Out = normed
+
+			bc.Heads = make([]HeadCache, len(block.Attention.Heads))
 			var concat [][]float64
 
-			// keep a copy of original input matrix
-			x := CopyMat (input_embed)
+			for hi, ah := range block.Attention.Heads {
+				hc := &bc.Heads[hi]
 
-			// first layer normalization
-			input_embed = applyLayerNorm (input_embed, t.LN1)
-			fmt.Println ("embed dimensions after first normalization : ", len (input_embed), " ", len (input_embed[0]))
-
-			for index, ah:= range t.Attention.Heads {
-				// Query matrix
-				Q, err := Mult (input_embed, ah.W_Q)
+				Q, err := Mult(normed, ah.W_Q)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
+				}
+				K, err := Mult(normed, ah.W_K)
+				if err != nil {
+					return nil, nil, err
+				}
+				V, err := Mult(normed, ah.W_V)
+				if err != nil {
+					return nil, nil, err
 				}
 
-				fmt.Println ("Query matrix dimensions ", len (Q), " ", len (Q[0]))
-
-				// Key matrix
-				K, err := Mult (input_embed, ah.W_K)
+				Kt := transpose(K)
+				W, err := Mult(Q, Kt)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 
-				fmt.Println ("Key matrix dimensions ", len (K), " ", len (K[0]))
-
-				// Value Matrix
-				V, err := Mult (input_embed, ah.W_V)
-				if err != nil {
-					return nil, err
+				dHead := m.DModel / m.NumHeads
+				scale := 1.0 / math.Sqrt(float64(dHead))
+				for i := range W {
+					for j := range W[i] {
+						W[i][j] *= scale
+					}
 				}
 
-				fmt.Println ("Value matrix dimensions ", len (V), " ", len (V[0]))
-
-				// transpose the keys matrix
-				Kt := transpose (K)
-
-				// multiply query with key to get Weights
-				W, err := Mult (Q, Kt)
-				if err != nil {
-					return nil, err
-				}
-
-				// masking the upper triangle
-				// A token can only affect tokens coming before it
-				for i:=0; i< len (W); i++ {
-					for j:=i+1 ; j< len (W[i]) ; j++ {
+				for i := 0; i < len(W); i++ {
+					for j := i + 1; j < len(W[i]); j++ {
 						W[i][j] = -1e9
 					}
 				}
 
-				// apply softmax
 				for i := range W {
-					SoftMax (W[i])
+					SoftMax(W[i])
 				}
 
-				headOut, err := Mult (W, V)
+				hc.Q = Q
+				hc.K = K
+				hc.V = V
+				hc.W = CopyMat(W)
+
+				headOut, err := Mult(W, V)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 
-				if index == 0 {
+				if hi == 0 {
 					concat = headOut
 				} else {
-					concat, err = Concat (concat, headOut)
+					concat, err = Concat(concat, headOut)
 					if err != nil {
-						return nil, err
+						return nil, nil, err
 					}
 				}
+
+				fmt.Printf("Head %d Q:%v K:%v V:%v W:%v headOut:%v\n",
+					hi, len(Q), len(K), len(V), len(W), len(headOut))
 			}
 
-			attentionOut, err := Mult (concat, t.Attention.W_O)  // W_O read-only
+			bc.Concat = CopyMat(concat)
+			attentionOut, err := Mult(concat, block.Attention.W_O)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 
-			// add the attention output to original input embedding
-			Add (x, attentionOut)
-			fmt.Println ("input embed after adding attention output", len (x), " ", len (x[0]))
+			for i := range x {
+				for j := range x[i] {
+					x[i][j] += attentionOut[i][j]
+				}
+			}
 
-			// new snapshot
-			input_embed = CopyMat (x)
+			// === FFN sublayer ===
+			bc.LN2In = CopyMat(x)
 
-			// Next is Layer normalization
-			normal := applyLayerNorm (input_embed, t.LN2)
-			fmt.Println ("embed after normalization dimensions : ", len (normal), " ", len (normal[0]))
-	
-			// Feed Forward
-			// multiply with Weight matrix 1
-			ffn1, err := Mult (normal, t.FFN.W1)
+			normed = applyLayerNorm(x, block.LN2)
+			bc.LN2Out = normed
+
+			ffn1, err := Mult(normed, block.FFN.W1)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
-
-			// add bias 1
 			for i := range ffn1 {
-				for j:= range ffn1[i] {
-					ffn1[i][j] += t.FFN.B1[j]
+				for j := range ffn1[i] {
+					ffn1[i][j] += block.FFN.B1[j]
 				}
 			}
+			bc.FFN1 = CopyMat(ffn1)
 
-			// apply relu
-			ReLU (ffn1)
-	
-			// multiply weight matrix 2
-			ffn2, err := Mult (ffn1, t.FFN.W2)
+			ReLU(ffn1)
+			bc.FFN1R = CopyMat(ffn1)
+
+			ffn2, err := Mult(ffn1, block.FFN.W2)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
-
-			// add bias 1
 			for i := range ffn2 {
-				for j:= range ffn2[i] {
-					ffn2[i][j] += t.FFN.B2[j]
+				for j := range ffn2[i] {
+					ffn2[i][j] += block.FFN.B2[j]
 				}
 			}
 
-			// add the ffn2 to input embedding
-			Add (input_embed, ffn2)
-			fmt.Println ("input embed after adding feed forward 2 layer output", len (input_embed), " ", len (input_embed[0]))
+			for i := range x {
+				for j := range x[i] {
+					x[i][j] += ffn2[i][j]
+				}
+			}
 		}
 
-		// get the logits
-		logits, err:= Mult(input_embed, m.Unembed)
-
+		cache.FinalEmb = CopyMat(x)
+		logits, err := Mult(x, m.Unembed)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		allLogits = append(allLogits, logits...)
-
 		low += high
 	}
 
-	return allLogits, nil
+	cache.Logits = allLogits
+	return cache, allLogits, nil
 }
 
-
 func applyLayerNorm(x [][]float64, ln LayerNormal) [][]float64 {
-    result := CopyMat(x)
-    d := len(result[0])
-    for i := range result {
-        var mean float64
-        for _, v := range result[i] {
-            mean += v
-        }
-        mean /= float64(d)
+	result := CopyMat(x)
+	d := len(result[0])
+	for i := range result {
+		var mean float64
+		for _, v := range result[i] {
+			mean += v
+		}
+		mean /= float64(d)
 
-        var variance float64
-        for _, v := range result[i] {
-            diff := v - mean
-            variance += diff * diff
-        }
-        variance /= float64(d)
+		var variance float64
+		for _, v := range result[i] {
+			diff := v - mean
+			variance += diff * diff
+		}
+		variance /= float64(d)
 
-        for j := range result[i] {
-            result[i][j] = (result[i][j] - mean) / math.Sqrt(variance+1e-5)
-            result[i][j] = result[i][j]*ln.Gamma[j] + ln.Beta[j]
-        }
-    }
-    return result
+		for j := range result[i] {
+			result[i][j] = (result[i][j] - mean) / math.Sqrt(variance+1e-5)
+			result[i][j] = result[i][j]*ln.Gamma[j] + ln.Beta[j]
+		}
+	}
+	return result
 }
