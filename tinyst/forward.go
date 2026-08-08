@@ -1,7 +1,6 @@
 package tinyst
 
 import (
-	"fmt"
 	"math"
 )
 
@@ -107,9 +106,6 @@ func (m *Model) Forward(input []int) (*TrainCache, [][]float64, error) {
 						return nil, nil, err
 					}
 				}
-
-				fmt.Printf("Head %d Q:%v K:%v V:%v W:%v headOut:%v\n",
-					hi, len(Q), len(K), len(V), len(W), len(headOut))
 			}
 
 			bc.Concat = CopyMat(concat)

@@ -119,7 +119,7 @@ func layerNormBackward(dOut [][]float64, input [][]float64, ln LayerNormal) ([][
 	return dInput, dGamma, dBeta
 }
 
-func (m *Model) Backward(cache *TrainCache, targets []int) *Gradients {
+func (m *Model) Backward(cache *TrainCache, targets []int) (float64, *Gradients) {
 	grads := newGradients(m)
 	batchSize := len(cache.Logits)
 	vocabSize := len(cache.Logits[0])
@@ -127,10 +127,12 @@ func (m *Model) Backward(cache *TrainCache, targets []int) *Gradients {
 
 	// ============== Step 1: Loss gradient (combined CE + softmax) ==============
 	dLogits := make([][]float64, batchSize)
+	var totalLoss float64
 	for i := range cache.Logits {
 		dLogits[i] = make([]float64, vocabSize)
 		copy(dLogits[i], cache.Logits[i])
 		SoftMax(dLogits[i])
+		totalLoss -= math.Log(dLogits[i][targets[i]])
 		dLogits[i][targets[i]] -= 1.0
 	}
 
@@ -300,5 +302,5 @@ func (m *Model) Backward(cache *TrainCache, targets []int) *Gradients {
 		}
 	}
 
-	return grads
+	return totalLoss/float64(batchSize), grads
 }

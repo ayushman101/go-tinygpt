@@ -129,9 +129,9 @@ func (model *Model) Init (path string) error {
 		return nil
 	}
 	rng := rand.New (rand.NewSource(time.Now ().UnixNano ()))
-	fillRandom (model.TokenEmbed, rng)
-	fillRandom (model.PosEmbed, rng)
-	fillRandom (model.Unembed, rng)
+	fillWeights (model.TokenEmbed, rng)
+	fillWeights (model.PosEmbed, rng)
+	fillWeights (model.Unembed, rng)
 
 	// allocate model transformers
 	for i:= range model.TBlocks {
@@ -140,23 +140,23 @@ func (model *Model) Init (path string) error {
 		// allocate transformer Attention
 		for j := range block.Attention.Heads {
 			head := &block.Attention.Heads[j]
-			fillRandom (head.W_Q, rng)
-			fillRandom (head.W_K, rng)
-			fillRandom (head.W_V, rng)
+			fillWeights (head.W_Q, rng)
+			fillWeights (head.W_K, rng)
+			fillWeights (head.W_V, rng)
 		}
 
-		fillRandom (block.Attention.W_O, rng)
+		fillWeights (block.Attention.W_O, rng)
 
 		// allocate transformer FeedForward
-		fillRandom (block.FFN.W1, rng)
-		fillRandom (block.FFN.W2, rng)
+		fillWeights (block.FFN.W1, rng)
+		fillWeights (block.FFN.W2, rng)
 
 		for k:= range block.FFN.B1 {
-			block.FFN.B1 [k] = rng.Float64 ()
+			block.FFN.B1 [k] = 0
 		}
 
 		for k:= range block.FFN.B2 {
-			block.FFN.B2 [k] = rng.Float64 ()
+			block.FFN.B2 [k] = 0
 		}
 
 		// allocate layer normal LN1
@@ -170,10 +170,10 @@ func (model *Model) Init (path string) error {
 	return nil
 }
 
-func fillRandom (mat [][]float64, rng *rand.Rand) {
+func fillWeights (mat [][]float64, rng *rand.Rand) {
 	for r:= range mat {
 		for c := range mat[r] {
-			mat[r][c] = rng.Float64 ()
+			mat[r][c] = rng.NormFloat64 () * 0.02
 		}
 	}
 }
